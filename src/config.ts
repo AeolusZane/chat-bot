@@ -8,7 +8,7 @@ export default {
   // 在群组中设置唤醒微信机器人的关键词
   groupKey: '',
   // 在私聊中设置唤醒微信机器人的关键词
-  privateKey: '',
+  privateKey: '宝',
   // 重置上下文的关键词，如可设置为reset
   resetKey: 'reset',
   // 开启会后收到ChatGPT的自动回复
@@ -16,7 +16,7 @@ export default {
   // 根据正则匹配是否自动通过好友验证
   friendShipRule: /chatgpt|chat/,
   // 是否在群聊中按照回复的格式进行回复
-  groupReplyMode: true,
+  groupReplyMode: false,
   // 是否在私聊中按照回复的格式进行回复
   privateReplyMode: false,
 };
