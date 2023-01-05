@@ -15,15 +15,39 @@ const conversationMap = new Map();
 //   userAgent: config.userAgent,
 // });
 
-async function getReply(content) {
+async function getReply(content, contactId, who) {
+  const conversation = getConversation(contactId);
+  let prompt = (conversation || '') + `<%${who}%>:${content.trim()}\nyou:`;
+  prompt = prompt.split('\n').slice(-30).join('\n');
+  // console.log('prompt🐱\n ', prompt + '\n🐴');
+
   const { data, status } = await openai.createCompletion({
-    prompt: content,
+    prompt,
     model: 'text-davinci-003',
-    temperature: 0.6,
+    temperature: 0.5,
     max_tokens: 2048,
+    frequency_penalty: 0.0,
+    presence_penalty: 0.0,
+    top_p: 1.0,
+    stop: [`<%${who}%>:`],
   });
-  console.log(data.choices);
-  return data.choices[0].text || 'I have no idea what you are talking about.';
+  let reply: string =
+    data.choices[0].text || 'I have no idea what you are talking about.';
+  console.log('reply处理前哈\n ', reply + '\n🐴');
+  reply = reply
+    .split(`<%${who}%>:`)
+    .slice(-1)
+    .join('\n')
+    .split('\n')
+    .slice(-10000)
+    .join('\n');
+
+  const log = `${prompt}${reply.trim()}\n`;
+  console.log('reply🐱\n ', reply + '\n🐴');
+
+  setConversation(contactId, log);
+
+  return reply;
 }
 
 function resetConversation(contactId: string) {
@@ -32,14 +56,17 @@ function resetConversation(contactId: string) {
   }
 }
 
-// function getConversation(contactId: string) {
-//   if (conversationMap.has(contactId)) {
-//     return conversationMap.get(contactId);
-//   }
-//   // const conversation = chatGPT.getConversation();
-//   conversationMap.set(contactId, conversation);
-//   return conversation;
-// }
+function getConversation(contactId: string) {
+  if (conversationMap.has(contactId)) {
+    return conversationMap.get(contactId);
+  }
+  // const conversation = chatGPT.getConversation();
+  return null;
+}
+
+function setConversation(contactId: string, conversation) {
+  conversationMap.set(contactId, conversation);
+}
 
 async function getChatGPTReply(content, contactId) {
   // const currentConversation = getConversation(contactId);
@@ -54,7 +81,7 @@ async function getChatGPTReply(content, contactId) {
   // return response;
 }
 
-export async function replyMessage(contact, content, contactId) {
+export async function replyMessage(contact, content, contactId, who) {
   try {
     if (
       content.trim().toLocaleLowerCase() === config.resetKey.toLocaleLowerCase()
@@ -68,7 +95,7 @@ export async function replyMessage(contact, content, contactId) {
     //   config.retryTimes,
     //   500
     // );
-    let message = await getReply(content);
+    let message = await getReply(content, contactId, who);
     message = message.trim();
 
     if (
@@ -86,7 +113,7 @@ export async function replyMessage(contact, content, contactId) {
     if (e.message.includes('timed out')) {
       await contact.say(
         content +
-          '\n-----------\nERROR: Please try again, ChatGPT timed out for waiting response.'
+        `\n-----------\nERROR: Please try again, ChatGPT timed out for waiting response.`
       );
     }
     conversationMap.delete(contactId);

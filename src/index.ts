@@ -25,7 +25,7 @@ async function onMessage(msg) {
     if (await msg.mentionSelf()) {
       if (pattern.test(content)) {
         const groupContent = content.replace(pattern, '');
-        replyMessage(room, groupContent, contactId);
+        replyMessage(room, groupContent, contactId, alias);
         return;
       } else {
         console.log(
@@ -40,7 +40,8 @@ async function onMessage(msg) {
         replyMessage(
           contact,
           content.substring(config.privateKey.length).trim(),
-          contactId
+          contactId,
+          alias
         );
       } else {
         console.log(

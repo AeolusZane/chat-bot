@@ -1,3 +1,3 @@
 export const pluginConfig = {
-  apiKey: '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',
+  apiKey: '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',
 };
