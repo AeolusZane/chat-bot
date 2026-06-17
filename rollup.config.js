@@ -20,6 +20,6 @@ export default {
       footer
     }
   ],
-  external: [''],
+  external: ['', 'gif-encoder-2'],
   plugins: [externals(), typescript(), commonjs(), resolve(), json()]
 }

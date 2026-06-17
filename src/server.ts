@@ -1,13 +1,30 @@
 import http from 'http';
 import { URL } from 'url';
+import path from 'path';
+import fs from 'fs';
 import type { Wechaty } from 'wechaty';
+import { FileBox } from 'file-box';
 import { queryHistory } from './history';
+
+// 抑制 GifCodec 警告
+process.on('warning', (warning) => {
+  if (warning.message.includes('GifCodec')) {
+    return; // 忽略 GifCodec 相关警告
+  }
+  console.warn(warning);
+});
 
 const PORT = Number(process.env.BOT_HTTP_PORT) || 3001;
 
 interface SendBody {
   to: string; // 群名(topic) 或 用户名/备注
   message: string;
+  isRoom?: boolean; // true=发群, false/省略=发个人
+}
+
+interface SendFileBody {
+  to: string; // 群名(topic) 或 用户名/备注
+  filePath: string; // 文件路径
   isRoom?: boolean; // true=发群, false/省略=发个人
 }
 
@@ -72,6 +89,40 @@ async function sendMessage(bot: Wechaty, body: SendBody) {
   return `已发送给用户「${to}」`;
 }
 
+async function sendFile(bot: Wechaty, body: SendFileBody) {
+  const { to, filePath, isRoom } = body;
+  if (!to || !filePath) {
+    throw new Error('缺少参数 to 或 filePath');
+  }
+
+  // 解析文件路径（支持相对路径和绝对路径）
+  const resolvedPath = path.isAbsolute(filePath) 
+    ? filePath 
+    : path.resolve(process.cwd(), filePath);
+
+  // 检查文件是否存在
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`文件不存在: ${resolvedPath}`);
+  }
+
+  // 创建 FileBox 对象
+  const fileBox = FileBox.fromFile(resolvedPath);
+
+  if (isRoom) {
+    const room = await bot.Room.find({ topic: to });
+    if (!room) throw new Error(`未找到群: ${to}`);
+    await room.say(fileBox);
+    return `已发送文件到群「${to}」`;
+  }
+
+  // 个人：先按备注/名称找，找不到再按昵称
+  let contact = await bot.Contact.find({ alias: to });
+  if (!contact) contact = await bot.Contact.find({ name: to });
+  if (!contact) throw new Error(`未找到用户: ${to}`);
+  await contact.say(fileBox);
+  return `已发送文件给用户「${to}」`;
+}
+
 export function startServer(bot: Wechaty) {
   const server = http.createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -113,11 +164,19 @@ export function startServer(bot: Wechaty) {
         return;
       }
 
+      if (req.method === 'POST' && req.url === '/send-file') {
+        const body = await readJson(req) as any;
+        const result = await sendFile(bot, body);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ok: true, result }));
+        return;
+      }
+
       res.statusCode = 404;
       res.end(
         JSON.stringify({
           ok: false,
-          error: 'GET /rooms | GET /friends | GET /history | POST /send',
+          error: 'GET /rooms | GET /friends | GET /history | POST /send | POST /send-file',
         })
       );
     } catch (e: any) {
@@ -127,6 +186,11 @@ export function startServer(bot: Wechaty) {
   });
 
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`主动发送接口已启动: http://127.0.0.1:${PORT}/send`);
+    console.log(`主动发送接口已启动:`);
+    console.log(`  - 文本消息: http://127.0.0.1:${PORT}/send (POST)`);
+    console.log(`  - 文件发送: http://127.0.0.1:${PORT}/send-file (POST)`);
+    console.log(`  - 好友列表: http://127.0.0.1:${PORT}/friends (GET)`);
+    console.log(`  - 群列表:   http://127.0.0.1:${PORT}/rooms (GET)`);
+    console.log(`  - 历史记录: http://127.0.0.1:${PORT}/history (GET)`);
   });
 }
