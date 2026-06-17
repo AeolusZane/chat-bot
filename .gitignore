@@ -3,3 +3,14 @@
 .env
 *.memory-card.json
 lib
+
+# 运行时日志
+bot_*.log
+*.log
+
+# 登录 session / 存储数据
+data/
+storage/
+session/
+.wechaty/
+wechaty-*
