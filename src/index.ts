@@ -2,6 +2,8 @@ import { WechatyBuilder } from 'wechaty';
 import qrcodeTerminal from 'qrcode-terminal';
 import config from './config';
 import { replyMessage } from './chatgpt';
+import { startServer } from './server';
+import { logMessage } from './history';
 
 async function onMessage(msg) {
   const contact = msg.talker();
@@ -11,6 +13,20 @@ async function onMessage(msg) {
   const room = msg.room();
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
+
+  // 记录所有文本消息到历史（含机器人自己发的）
+  if (isText && content) {
+    logMessage({
+      time: new Date().toISOString(),
+      type: room ? 'room' : 'contact',
+      room: room ? await room.topic() : '',
+      talker: (await contact.name()) || alias,
+      talkerId: contactId,
+      self: msg.self(),
+      text: content,
+    });
+  }
+
   if (msg.self()) {
     return;
   }
@@ -69,6 +85,8 @@ async function onLogin(user) {
   if (config.autoReply) {
     console.log(`Automatic robot chat mode has been activated`);
   }
+  // 登录成功后启动主动发送接口
+  startServer(bot);
 }
 
 function onLogout(user) {

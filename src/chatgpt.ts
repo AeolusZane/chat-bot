@@ -1,121 +1,84 @@
-// import { ChatGPTAPI } from 'chatgpt';
-import pTimeout from 'p-timeout';
+import { execFile } from 'child_process';
 import config from './config';
-import { retryRequest } from './utils';
-import { Configuration, OpenAIApi } from 'openai';
-import { pluginConfig } from './api';
 
-const configuration = new Configuration({ apiKey: pluginConfig.apiKey });
-const openai = new OpenAIApi(configuration);
-
-const conversationMap = new Map();
-// const chatGPT = new ChatGPTAPI({
-//   sessionToken: config.chatGPTSessionToken,
-//   clearanceToken: config.clearanceToken,
-//   userAgent: config.userAgent,
-// });
-
-async function getReply(content, contactId, who) {
-  const conversation = getConversation(contactId);
-  let prompt = (conversation || '') + `<%${who}%>:${content.trim()}\nyou:`;
-  prompt = prompt.split('\n').slice(-30).join('\n');
-  // console.log('prompt🐱\n ', prompt + '\n🐴');
-
-  const { data, status } = await openai.createCompletion({
-    prompt,
-    model: 'text-davinci-003',
-    temperature: 0.5,
-    max_tokens: 2048,
-    frequency_penalty: 0.0,
-    presence_penalty: 0.0,
-    top_p: 1.0,
-    stop: [`<%${who}%>:`],
-  });
-  let reply: string =
-    data.choices[0].text || 'I have no idea what you are talking about.';
-  console.log('reply处理前哈\n ', reply + '\n🐴');
-  reply = reply
-    .split(`<%${who}%>:`)
-    .slice(-1)
-    .join('\n')
-    .split('\n')
-    .slice(-10000)
-    .join('\n');
-
-  const log = `${prompt}${reply.trim()}\n`;
-  console.log('reply🐱\n ', reply + '\n🐴');
-
-  setConversation(contactId, log);
-
-  return reply;
-}
+// 每个联系人对应一个 claude 会话 id，用于维持多轮上下文
+const sessionMap = new Map<string, string>();
 
 function resetConversation(contactId: string) {
-  if (conversationMap.has(contactId)) {
-    conversationMap.delete(contactId);
+  sessionMap.delete(contactId);
+}
+
+interface ClaudeResult {
+  result: string;
+  session_id: string;
+  is_error?: boolean;
+}
+
+// 调用本地已登录的 claude CLI（系统级 Claude），无需 API key
+function callClaude(content: string, sessionId?: string): Promise<ClaudeResult> {
+  const args = ['-p', '--output-format', 'json', '--model', 'opus'];
+  if (sessionId) {
+    args.push('--resume', sessionId);
   }
+  args.push(content);
+
+  return new Promise((resolve, reject) => {
+    execFile(
+      'claude',
+      args,
+      { maxBuffer: 10 * 1024 * 1024, timeout: 3 * 60 * 1000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          return reject(error);
+        }
+        try {
+          resolve(JSON.parse(stdout) as ClaudeResult);
+        } catch (e) {
+          reject(new Error(`无法解析 claude 输出: ${stdout || stderr}`));
+        }
+      }
+    );
+  });
 }
 
-function getConversation(contactId: string) {
-  if (conversationMap.has(contactId)) {
-    return conversationMap.get(contactId);
+async function getReply(content: string, contactId: string): Promise<string> {
+  const sessionId = sessionMap.get(contactId);
+  const res = await callClaude(content.trim(), sessionId);
+
+  if (res.is_error) {
+    throw new Error(res.result || 'claude 返回错误');
   }
-  // const conversation = chatGPT.getConversation();
-  return null;
+
+  // 记录会话 id，后续消息走 --resume 维持上下文
+  if (res.session_id) {
+    sessionMap.set(contactId, res.session_id);
+  }
+
+  return res.result || '我不太明白你在说什么。';
 }
 
-function setConversation(contactId: string, conversation) {
-  conversationMap.set(contactId, conversation);
-}
-
-async function getChatGPTReply(content, contactId) {
-  // const currentConversation = getConversation(contactId);
-  // send a message and wait for the response
-  // const threeMinutesMs = 3 * 60 * 1000;
-  // const response = await pTimeout(currentConversation.sendMessage(content), {
-  //   milliseconds: threeMinutesMs,
-  //   message: 'ChatGPT timed out waiting for response',
-  // });
-  // console.log('response: ', response);
-  // // response is a markdown-formatted string
-  // return response;
-}
-
-export async function replyMessage(contact, content, contactId, who) {
+export async function replyMessage(contact, content: string, contactId: string, who: string) {
   try {
-    if (
-      content.trim().toLocaleLowerCase() === config.resetKey.toLocaleLowerCase()
-    ) {
+    if (content.trim().toLocaleLowerCase() === config.resetKey.toLocaleLowerCase()) {
       resetConversation(contactId);
-      await contact.say('Previous conversation has been reset.');
+      await contact.say('上下文已重置。');
       return;
     }
-    // const message = await retryRequest(
-    //   () => getChatGPTReply(content, contactId),
-    //   config.retryTimes,
-    //   500
-    // );
-    let message = await getReply(content, contactId, who);
+
+    let message = await getReply(content, contactId);
     message = message.trim();
 
     if (
       (contact.topic && contact?.topic() && config.groupReplyMode) ||
       (!contact.topic && config.privateReplyMode)
     ) {
-      const result = content + '\n-----------\n' + message;
-      await contact.say(result);
-      return;
+      await contact.say(content + '\n-----------\n' + message);
     } else {
       await contact.say(message);
     }
   } catch (e: any) {
     console.error(e);
-    if (e.message.includes('timed out')) {
-      await contact.say(
-        content +
-        `\n-----------\nERROR: Please try again, ChatGPT timed out for waiting response.`
-      );
-    }
-    conversationMap.delete(contactId);
+    resetConversation(contactId);
+    await contact.say('请求出错，请稍后重试。');
   }
 }
