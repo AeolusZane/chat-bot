@@ -1,5 +1,5 @@
 import { execFile } from 'child_process';
-import config from './config';
+import config from '../config';
 
 // 每个联系人对应一个 claude 会话 id，用于维持多轮上下文
 const sessionMap = new Map<string, string>();
