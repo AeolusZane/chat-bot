@@ -20,6 +20,6 @@ export default {
       footer
     }
   ],
-  external: ['', 'gif-encoder-2'],
+  external: (id) => id === 'gifwrap' || id === 'jimp' || id.startsWith('@jimp/'),
   plugins: [externals(), typescript(), commonjs(), resolve(), json()]
 }

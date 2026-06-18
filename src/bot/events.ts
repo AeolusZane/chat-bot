@@ -10,6 +10,10 @@ export function registerEvents(bot: Wechaty) {
   bot.on('login', (user) => onLogin(bot, user));
   bot.on('logout', onLogout);
   bot.on('message', (msg) => onMessage(bot, msg));
+  // 监听 error/reset，避免 wechaty-puppet-wechat 网页协议心跳超时时
+  // 抛出未处理的 'error' 事件导致整个进程崩溃
+  bot.on('error', (err) => console.error('[wechaty error]', err?.message || err));
+  bot.on('reset', (reason) => console.warn('[wechaty reset]', reason));
 
   if (config.friendShipRule) {
     bot.on('friendship', onFriendShip);
