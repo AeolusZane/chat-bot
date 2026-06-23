@@ -236,9 +236,36 @@ curl -X POST http://127.0.0.1:3001/send-file \
 
 ---
 
+## 📋 开发规范
+
+每次修改功能或迭代，必须在 `HISTORY.md` 中追加一条记录，格式如下：
+
+```markdown
+## YYYY-MM-DD 简述标题
+
+- 具体改动1
+- 具体改动2
+```
+
+---
+
+## 🛠 系统依赖
+
+以下工具需全局安装，部分功能依赖它们：
+
+| 工具 | 用途 | 安装命令 |
+|------|------|---------|
+| **ffmpeg** | 音频格式转换（silk → wav） | `brew install ffmpeg` |
+| **openai-whisper** | 语音转文字（large 模型） | `pip3 install openai-whisper --break-system-packages` |
+
+> Whisper large 模型（~3GB）首次运行时自动下载到 `~/.cache/whisper/`，无需手动操作。
+
+---
+
 ## 📝 技术栈
 
 - **Wechaty**: 微信机器人框架
 - **FileBox**: 文件传输支持
 - **TypeScript**: 开发语言
 - **Node.js >= 16.8**: 运行环境
+- **Python 3**: 语音识别（Whisper）

@@ -2,7 +2,10 @@ import type { Wechaty } from 'wechaty';
 import qrcodeTerminal from 'qrcode-terminal';
 import config from '../config';
 import { replyMessage } from '../ai/claude';
-import { logMessage, initLog } from '../store/message-log';
+import { logMessage, initLog, getDataDir } from '../store/message-log';
+import fs from 'fs';
+import path from 'path';
+import { execFile } from 'child_process';
 import { startServer } from '../http/server';
 
 export function registerEvents(bot: Wechaty) {
@@ -29,8 +32,61 @@ async function onMessage(bot: Wechaty, msg: any) {
   const alias = (await contact.alias()) || (await contact.name());
   const isText = msg.type() === bot.Message.Type.Text;
 
-  // 记录所有文本消息到历史（含机器人自己发的）
-  if (isText && content) {
+  const MSG_TYPE_LABEL: Record<number, string> = {
+    [bot.Message.Type.Audio]: '[语音]',
+    [bot.Message.Type.Video]: '[视频]',
+    [bot.Message.Type.Attachment]: '[文件]',
+    [bot.Message.Type.Emoticon]: '[表情]',
+    [bot.Message.Type.Location]: '[位置]',
+    [bot.Message.Type.MiniProgram]: '[小程序]',
+    [bot.Message.Type.Url]: '[链接]',
+    [bot.Message.Type.Contact]: '[名片]',
+    [bot.Message.Type.RedEnvelope]: '[红包]',
+    [bot.Message.Type.Transfer]: '[转账]',
+    [bot.Message.Type.Recalled]: '[撤回消息]',
+  };
+
+  let logText = isText ? content : (MSG_TYPE_LABEL[msg.type()] ?? `[消息类型:${msg.type()}]`);
+
+  // 图片：下载保存到本地
+  if (msg.type() === bot.Message.Type.Image) {
+    try {
+      const fileBox = await msg.toFileBox();
+      const date = new Date().toISOString().slice(0, 10);
+      const imgDir = path.join(getDataDir(), 'images', date);
+      fs.mkdirSync(imgDir, { recursive: true });
+      const fileName = `${Date.now()}_${fileBox.name}`;
+      const filePath = path.join(imgDir, fileName);
+      await fileBox.toFile(filePath, true);
+      logText = `[图片:${filePath}]`;
+    } catch (e: any) {
+      logText = '[图片:下载失败]';
+    }
+  }
+
+  // 语音：下载 silk 文件，调 whisper 转文字
+  if (msg.type() === bot.Message.Type.Audio) {
+    try {
+      const fileBox = await msg.toFileBox();
+      const date = new Date().toISOString().slice(0, 10);
+      const audioDir = path.join(getDataDir(), 'audio', date);
+      fs.mkdirSync(audioDir, { recursive: true });
+      const silkPath = path.join(audioDir, `${Date.now()}.silk`);
+      await fileBox.toFile(silkPath, true);
+      const scriptPath = path.resolve(process.cwd(), 'scripts/transcribe.py');
+      const transcript = await new Promise<string>((resolve) => {
+        execFile('python3', [scriptPath, silkPath], { timeout: 120000 }, (err, stdout) => {
+          resolve(stdout?.trim() || '[语音:转文字失败]');
+        });
+      });
+      logText = `[语音:${transcript}]`;
+    } catch (e: any) {
+      logText = '[语音:下载失败]';
+    }
+  }
+
+  // 记录所有消息到历史（含机器人自己发的）
+  if (logText) {
     logMessage({
       time: new Date().toISOString(),
       type: room ? 'room' : 'contact',
@@ -38,7 +94,7 @@ async function onMessage(bot: Wechaty, msg: any) {
       talker: (await contact.name()) || alias,
       talkerId: contactId,
       self: msg.self(),
-      text: content,
+      text: logText,
     });
   }
 

@@ -2,12 +2,17 @@ import fs from 'fs';
 import path from 'path';
 
 let LOG_FILE = path.resolve(process.cwd(), 'data/messages.jsonl');
+let DATA_DIR = path.resolve(process.cwd(), 'data');
 
 export function initLog(accountName: string) {
   const safe = accountName.replace(/[^\w一-龥·@.-]/g, '_');
-  const dir = path.resolve(process.cwd(), 'data', safe);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  LOG_FILE = path.join(dir, 'messages.jsonl');
+  DATA_DIR = path.resolve(process.cwd(), 'data', safe);
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  LOG_FILE = path.join(DATA_DIR, 'messages.jsonl');
+}
+
+export function getDataDir() {
+  return DATA_DIR;
 }
 
 export interface MsgRecord {
