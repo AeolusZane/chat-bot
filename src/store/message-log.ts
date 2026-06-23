@@ -37,6 +37,50 @@ export function logMessage(record: MsgRecord) {
   }
 }
 
+const RETENTION_DAYS = 50;
+
+// 清理超过保留期的消息记录和媒体文件
+export function cleanupOldData() {
+  const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+  // 1. 清理 messages.jsonl 中过期的消息
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      const lines = fs.readFileSync(LOG_FILE, 'utf-8').split('\n');
+      const kept: string[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const rec: MsgRecord = JSON.parse(line);
+          if (new Date(rec.time).getTime() >= cutoff) kept.push(line);
+        } catch {
+          continue;
+        }
+      }
+      fs.writeFileSync(LOG_FILE, kept.length ? kept.join('\n') + '\n' : '');
+    }
+  } catch (e: any) {
+    console.error('清理消息日志失败:', e.message);
+  }
+
+  // 2. 清理 images / audio 下按日期命名的过期子目录
+  for (const sub of ['images', 'audio']) {
+    const baseDir = path.join(DATA_DIR, sub);
+    if (!fs.existsSync(baseDir)) continue;
+    try {
+      for (const name of fs.readdirSync(baseDir)) {
+        const t = new Date(name).getTime(); // 目录名是 YYYY-MM-DD
+        if (!isNaN(t) && t < cutoff) {
+          fs.rmSync(path.join(baseDir, name), { recursive: true, force: true });
+          console.log(`已清理过期目录: ${sub}/${name}`);
+        }
+      }
+    } catch (e: any) {
+      console.error(`清理 ${sub} 目录失败:`, e.message);
+    }
+  }
+}
+
 interface QueryOpts {
   room?: string; // 按群名过滤
   name?: string; // 按发送者昵称过滤

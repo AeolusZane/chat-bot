@@ -2,7 +2,7 @@ import type { Wechaty } from 'wechaty';
 import qrcodeTerminal from 'qrcode-terminal';
 import config from '../config';
 import { replyMessage } from '../ai/claude';
-import { logMessage, initLog, getDataDir } from '../store/message-log';
+import { logMessage, initLog, getDataDir, cleanupOldData } from '../store/message-log';
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -152,6 +152,9 @@ async function onLogin(bot: Wechaty, user: any) {
   console.log(`${user} has logged in`);
   console.log(`Current time:${new Date()}`);
   initLog(user.name());
+  // 登录时清理一次，之后每 24 小时清理一次（仅保留最近 50 天）
+  cleanupOldData();
+  setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
   if (config.autoReply) {
     console.log(`Automatic robot chat mode has been activated`);
   }
