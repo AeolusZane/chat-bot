@@ -2,7 +2,12 @@ import type { Wechaty } from 'wechaty';
 import qrcodeTerminal from 'qrcode-terminal';
 import config from '../config';
 import { replyMessage } from '../ai/claude';
-import { logMessage, initLog, getDataDir, cleanupOldData } from '../store/message-log';
+import {
+  logMessage,
+  initLog,
+  getDataDir,
+  cleanupOldData,
+} from '../store/message-log';
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -15,7 +20,9 @@ export function registerEvents(bot: Wechaty) {
   bot.on('message', (msg) => onMessage(bot, msg));
   // 监听 error/reset，避免 wechaty-puppet-wechat 网页协议心跳超时时
   // 抛出未处理的 'error' 事件导致整个进程崩溃
-  bot.on('error', (err) => console.error('[wechaty error]', err?.message || err));
+  bot.on('error', (err) =>
+    console.error('[wechaty error]', err?.message || err)
+  );
   bot.on('reset', (reason) => console.warn('[wechaty reset]', reason));
 
   if (config.friendShipRule) {
@@ -46,7 +53,9 @@ async function onMessage(bot: Wechaty, msg: any) {
     [bot.Message.Type.Recalled]: '[撤回消息]',
   };
 
-  let logText = isText ? content : (MSG_TYPE_LABEL[msg.type()] ?? `[消息类型:${msg.type()}]`);
+  let logText = isText
+    ? content
+    : MSG_TYPE_LABEL[msg.type()] ?? `[消息类型:${msg.type()}]`;
 
   // 图片：下载保存到本地
   if (msg.type() === bot.Message.Type.Image) {
@@ -75,9 +84,14 @@ async function onMessage(bot: Wechaty, msg: any) {
       await fileBox.toFile(silkPath, true);
       const scriptPath = path.resolve(process.cwd(), 'scripts/transcribe.py');
       const transcript = await new Promise<string>((resolve) => {
-        execFile('python3', [scriptPath, silkPath], { timeout: 120000 }, (err, stdout) => {
-          resolve(stdout?.trim() || '[语音:转文字失败]');
-        });
+        execFile(
+          'python3',
+          [scriptPath, silkPath],
+          { timeout: 120000 },
+          (err, stdout) => {
+            resolve(stdout?.trim() || '[语音:转文字失败]');
+          }
+        );
       });
       logText = `[语音:${transcript}]`;
     } catch (e: any) {
@@ -87,12 +101,24 @@ async function onMessage(bot: Wechaty, msg: any) {
 
   // 记录所有消息到历史（含机器人自己发的）
   if (logText) {
+    // 私聊会话对端：自己发的取接收者，收到的取发送者；群聊为空
+    let peer = '';
+    let peerId = '';
+    if (!room) {
+      const peerContact = msg.self() ? receiver : contact;
+      if (peerContact) {
+        peerId = peerContact.id;
+        peer = (await peerContact.alias()) || (await peerContact.name());
+      }
+    }
     logMessage({
       time: new Date().toISOString(),
       type: room ? 'room' : 'contact',
       room: room ? await room.topic() : '',
       talker: (await contact.name()) || alias,
       talkerId: contactId,
+      peer,
+      peerId,
       self: msg.self(),
       text: logText,
     });

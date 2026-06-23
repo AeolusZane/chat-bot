@@ -21,6 +21,8 @@ export interface MsgRecord {
   room: string; // 群名(topic)，私聊为空
   talker: string; // 发送者昵称
   talkerId: string;
+  peer: string; // 会话对端昵称（私聊用：收到时为发送者，自己发时为接收者），群聊为空
+  peerId: string;
   self: boolean; // 是否机器人自己发的
   text: string;
 }
@@ -84,6 +86,7 @@ export function cleanupOldData() {
 interface QueryOpts {
   room?: string; // 按群名过滤
   name?: string; // 按发送者昵称过滤
+  peer?: string; // 按私聊会话对端过滤（昵称或 id）
   limit?: number; // 返回最近多少条，默认 50
 }
 
@@ -105,6 +108,8 @@ export function queryHistory(opts: QueryOpts): MsgRecord[] {
     }
     if (opts.room && rec.room !== opts.room) continue;
     if (opts.name && rec.talker !== opts.name) continue;
+    if (opts.peer && rec.peer !== opts.peer && rec.peerId !== opts.peer)
+      continue;
     matched.push(rec);
   }
 
