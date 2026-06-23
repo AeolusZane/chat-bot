@@ -2,7 +2,7 @@ import type { Wechaty } from 'wechaty';
 import qrcodeTerminal from 'qrcode-terminal';
 import config from '../config';
 import { replyMessage } from '../ai/claude';
-import { logMessage } from '../store/message-log';
+import { logMessage, initLog } from '../store/message-log';
 import { startServer } from '../http/server';
 
 export function registerEvents(bot: Wechaty) {
@@ -95,6 +95,7 @@ function onScan(qrcode: string) {
 async function onLogin(bot: Wechaty, user: any) {
   console.log(`${user} has logged in`);
   console.log(`Current time:${new Date()}`);
+  initLog(user.name());
   if (config.autoReply) {
     console.log(`Automatic robot chat mode has been activated`);
   }

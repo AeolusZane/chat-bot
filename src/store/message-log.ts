@@ -1,9 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
-// 消息以 JSONL 追加存储到项目根目录 data/messages.jsonl
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const LOG_FILE = path.join(DATA_DIR, 'messages.jsonl');
+let LOG_FILE = path.resolve(process.cwd(), 'data/messages.jsonl');
+
+export function initLog(accountName: string) {
+  const safe = accountName.replace(/[^\w一-龥·@.-]/g, '_');
+  const dir = path.resolve(process.cwd(), 'data', safe);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  LOG_FILE = path.join(dir, 'messages.jsonl');
+}
 
 export interface MsgRecord {
   time: string; // ISO 时间
@@ -15,16 +20,10 @@ export interface MsgRecord {
   text: string;
 }
 
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
 // 记录一条消息（追加写，失败不影响主流程）
 export function logMessage(record: MsgRecord) {
   try {
-    ensureDir();
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
     fs.appendFile(LOG_FILE, JSON.stringify(record) + '\n', (err) => {
       if (err) console.error('写消息日志失败:', err.message);
     });

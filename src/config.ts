@@ -12,7 +12,7 @@ export default {
   // 重置上下文的关键词，如可设置为reset
   resetKey: 'reset',
   // 开启会后收到ChatGPT的自动回复
-  autoReply: true,
+  autoReply: false,
   // 根据正则匹配是否自动通过好友验证
   friendShipRule: /chatgpt|chat/,
   // 是否在群聊中按照回复的格式进行回复
